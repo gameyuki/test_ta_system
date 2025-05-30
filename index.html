@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASI学習支援システム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .left-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #30363d;
+        }
+        
+        .right-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #161b22;
+            padding: 12px 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .editor-container {
+            flex: 1;
+            position: relative;
+            background: #0d1117;
+        }
+        
+        #editor {
+            width: 100%;
+            height: 100%;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 20px;
+            background: #0d1117;
+            color: #c9d1d9;
+            border: none;
+            outline: none;
+            resize: none;
+        }
+        
+        .toolbar {
+            background: #161b22;
+            padding: 12px 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        button {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            background: #2ea043;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        button:disabled {
+            background: #30363d;
+            cursor: not-allowed;
+        }
+        
+        .terminal {
+            flex: 1;
+            background: #0d1117;
+            padding: 20px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .terminal-line {
+            margin-bottom: 4px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .terminal-output {
+            color: #c9d1d9;
+        }
+        
+        .terminal-error {
+            color: #f85149;
+        }
+        
+        .terminal-success {
+            color: #3fb950;
+        }
+        
+        .terminal-input {
+            color: #58a6ff;
+        }
+        
+        .terminal-log {
+            color: #8b949e;
+            font-size: 12px;
+        }
+        
+        .input-container {
+            background: #161b22;
+            border-top: 1px solid #30363d;
+            padding: 12px 20px;
+            display: none;
+        }
+        
+        .input-prompt {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .input-field {
+            flex: 1;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+        }
+        
+        .status-bar {
+            background: #161b22;
+            border-top: 1px solid #30363d;
+            padding: 8px 20px;
+            font-size: 12px;
+            color: #8b949e;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .log-panel {
+            height: 200px;
+            background: #0d1117;
+            border-top: 1px solid #30363d;
+            overflow-y: auto;
+            padding: 12px 20px;
+            font-size: 12px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        
+        .log-entry {
+            margin-bottom: 4px;
+            color: #8b949e;
+        }
+        
+        .log-timestamp {
+            color: #58a6ff;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #30363d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    <script type="module" src="main.js"></script>
+    <script type="module" src="https://esm.sh/@wasmer/wasi@1.3.0"></script>
+    <script type="module" src="https://esm.sh/@wasmer/wasmfs@1.3.0"></script>
+</head>
+<!-- <body>
+    <div class="container">
+        <div class="left-panel">
+            <div class="header">
+                <div class="title">エディタ</div>
+                <div id="editor-status"></div>
+            </div>
+            <div class="editor-container">
+                <textarea id="editor" spellcheck="false">#include &lt;stdio.h&gt;
+
+int main() {
+    printf("Hello, WASI World!\\n");
+    
+    char name[100];
+    printf("お名前を入力してください: ");
+    scanf("%s", name);
+    printf("こんにちは、%sさん！\\n", name);
+    
+    return 0;
+}</textarea>
+            </div>
+            <div class="toolbar">
+                <button id="compile-btn" onclick="compile()">
+                    コンパイル
+                </button>
+                <button id="run-btn" onclick="run()" disabled>
+                    実行
+                </button>
+                <button onclick="clearTerminal()">
+                    クリア
+                </button>
+                <div id="compile-status"></div>
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            <div class="header">
+                <div class="title">実行結果</div>
+            </div>
+            <div class="terminal" id="terminal"></div>
+            <div class="input-container" id="input-container">
+                <div class="input-prompt">
+                    <span>&gt;</span>
+                    <input type="text" class="input-field" id="input-field" placeholder="入力してください...">
+                    <button onclick="submitInput()">送信</button>
+                </div>
+            </div>
+            <div class="status-bar">
+                <div id="status">準備完了</div>
+                <div id="log-count">ログ: 0件</div>
+            </div>
+            <div class="log-panel" id="log-panel">
+                <div style="color: #58a6ff;">学習ログ (編集・コンパイル・実行の履歴)</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let wasmModule = null;
+        let isRunning = false;
+        let inputCallback = null;
+        let logs = [];
+        let editStartTime = Date.now();
+        let lastEditTime = Date.now();
+        
+        // 仮想ファイルシステム
+        class VirtualFileSystem {
+            constructor() {
+                this.files = new Map();
+            }
+            
+            write(path, content) {
+                this.files.set(path, content);
+            }
+            
+            read(path) {
+                return this.files.get(path) || null;
+            }
+        }
+        
+        const vfs = new VirtualFileSystem();
+        
+        // ターミナル出力
+        function terminalWrite(text, className = 'terminal-output') {
+            const terminal = document.getElementById('terminal');
+            const line = document.createElement('div');
+            line.className = `terminal-line ${className}`;
+            line.textContent = text;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        // ターミナルクリア
+        function clearTerminal() {
+            document.getElementById('terminal').innerHTML = '';
+            addLog('terminal_clear', 'ターミナルをクリア');
+        }
+        
+        // ログ追加
+        function addLog(type, message, details = {}) {
+            const timestamp = new Date();
+            const log = {
+                timestamp: timestamp.toISOString(),
+                type,
+                message,
+                details,
+                elapsed: Date.now() - editStartTime
+            };
+            logs.push(log);
+            
+            const logPanel = document.getElementById('log-panel');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-timestamp">[${timestamp.toLocaleTimeString()}]</span> ${message}`;
+            logPanel.appendChild(entry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+            
+            document.getElementById('log-count').textContent = `ログ: ${logs.length}件`;
+        }
+        
+        // エディタの変更監視
+        document.getElementById('editor').addEventListener('input', (e) => {
+            const now = Date.now();
+            if (now - lastEditTime > 1000) {
+                addLog('edit_pause', `編集一時停止 (${(now - lastEditTime) / 1000}秒)`, {
+                    line: e.target.value.split('\n').length,
+                    chars: e.target.value.length
+                });
+            }
+            lastEditTime = now;
+            
+            document.getElementById('run-btn').disabled = true;
+            wasmModule = null;
+        });
+        
+        // コンパイル（シミュレーション）
+        async function compile() {
+            const compileBtn = document.getElementById('compile-btn');
+            const runBtn = document.getElementById('run-btn');
+            const status = document.getElementById('compile-status');
+            
+            compileBtn.disabled = true;
+            runBtn.disabled = true;
+            status.innerHTML = '<span class="loading"></span> コンパイル中...';
+            
+            const code = document.getElementById('editor').value;
+            addLog('compile_start', 'コンパイル開始', { codeLength: code.length });
+            
+            // コンパイルのシミュレーション
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
+            // 簡単な構文チェック
+            const errors = [];
+            if (!code.includes('#include')) {
+                errors.push('エラー: #include文が見つかりません');
+            }
+            if (!code.includes('main')) {
+                errors.push('エラー: main関数が見つかりません');
+            }
+            
+            if (errors.length > 0) {
+                terminalWrite('コンパイルエラー:', 'terminal-error');
+                errors.forEach(err => terminalWrite(err, 'terminal-error'));
+                status.innerHTML = '<span style="color: #f85149;">✗ コンパイル失敗</span>';
+                addLog('compile_error', 'コンパイルエラー', { errors });
+            } else {
+                // WASMモジュールのシミュレーション
+                wasmModule = {
+                    code: code,
+                    compiled: true
+                };
+                terminalWrite('コンパイル成功!', 'terminal-success');
+                status.innerHTML = '<span style="color: #3fb950;">✓ コンパイル成功</span>';
+                runBtn.disabled = false;
+                addLog('compile_success', 'コンパイル成功');
+            }
+            
+            compileBtn.disabled = false;
+        }
+        
+        // 実行
+        async function run() {
+            if (!wasmModule || isRunning) return;
+            
+            isRunning = true;
+            document.getElementById('run-btn').disabled = true;
+            document.getElementById('status').textContent = '実行中...';
+            
+            terminalWrite('\n--- プログラム実行開始 ---\n', 'terminal-success');
+            addLog('execution_start', 'プログラム実行開始');
+            
+            // WASI実行のシミュレーション
+            const code = wasmModule.code;
+            
+            // printfの処理
+            const printfMatches = code.matchAll(/printf\("([^"]+)"(?:,\s*([^)]+))?\);/g);
+            for (const match of printfMatches) {
+                let output = match[1];
+                output = output.replace(/\\n/g, '\n');
+                
+                if (match[2] && output.includes('%s')) {
+                    // scanf後の変数を使用する場合
+                    if (output.includes('name')) {
+                        continue; // scanfの後で処理
+                    }
+                }
+                
+                terminalWrite(output);
+                addLog('wasi_call', 'fd_write (printf)', { output });
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            // scanfの処理
+            if (code.includes('scanf')) {
+                document.getElementById('input-container').style.display = 'block';
+                document.getElementById('input-field').focus();
+                
+                const userInput = await new Promise(resolve => {
+                    inputCallback = resolve;
+                });
+                
+                document.getElementById('input-container').style.display = 'none';
+                terminalWrite(userInput, 'terminal-input');
+                addLog('wasi_call', 'fd_read (scanf)', { input: userInput });
+                
+                // scanf後のprintfを処理
+                const lastPrintf = code.match(/printf\("こんにちは、%sさん！\\n", name\);/);
+                if (lastPrintf) {
+                    terminalWrite(`こんにちは、${userInput}さん！`);
+                    addLog('wasi_call', 'fd_write (printf with variable)', { output: `こんにちは、${userInput}さん！` });
+                }
+            }
+            
+            terminalWrite('\n--- プログラム終了 (終了コード: 0) ---\n', 'terminal-success');
+            addLog('execution_end', 'プログラム実行終了', { exitCode: 0 });
+            
+            document.getElementById('status').textContent = '実行完了';
+            document.getElementById('run-btn').disabled = false;
+            isRunning = false;
+        }
+        
+        // 入力送信
+        function submitInput() {
+            const input = document.getElementById('input-field').value;
+            if (inputCallback) {
+                inputCallback(input);
+                document.getElementById('input-field').value = '';
+            }
+        }
+        
+        // Enterキーで送信
+        document.getElementById('input-field').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitInput();
+            }
+        });
+        
+        // 初期化
+        addLog('system_start', 'システム起動');
+        terminalWrite('WASI学習支援システムへようこそ！', 'terminal-success');
+        terminalWrite('左側のエディタでC言語コードを編集し、「コンパイル」→「実行」してください。\n');
+    </script>
+</body> -->
+</html>
